@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "url": "https://chatgpt.com/c/6965a3af-15e4-832c-8ecd-e89fcd430993",
+    "domain": "chatgpt.com",
+    "content_type": "prompt",
+    "detection_type": "PHONE_NUMBER",
+    "summary": "Detected: PHONE_NUMBER",
+    "detections": [
+      {
+        "type": "PHONE_NUMBER",
+        "masked": "[REDACTED]"
+      }
+    ],
+    "guardrails_detections": [
+      "PHONE_NUMBER"
+    ],
+    "content_hash": "66441206ec9e9c39820b879a5baa544b402a1037dc63f99ee8cc71c76c358313",
+    "message": "My phone number is 1231231234",
+    "status": "approved",
+    "created_at": "2026-01-12T18:22:15.149333",
+    "updated_at": "2026-01-12T18:22:23.220466"
+  }
+]

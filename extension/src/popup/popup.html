@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jetstream Takehome</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <h1>Jetstream</h1>
+      </div>
+      <div class="status">
+        <span class="status-dot active"></span>
+        <span>Active</span>
+      </div>
+    </header>
+
+    <section class="stats">
+      <div class="stat-item">
+        <span class="stat-value" id="blocked-count">0</span>
+        <span class="stat-label">Blocked Today</span>
+      </div>
+    </section>
+
+    <section class="info">
+      <h2>Monitoring</h2>
+      <ul class="domain-list">
+        <li>chatgpt.com</li>
+        <li>claude.ai</li>
+      </ul>
+    </section>
+
+    <section class="info">
+      <h2>Detecting</h2>
+      <ul class="detect-list">
+        <li>Social Security Numbers (SSN)</li>
+      </ul>
+    </section>
+
+    <footer>
+      <a href="#" id="open-admin" class="btn">Open Admin Dashboard</a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
