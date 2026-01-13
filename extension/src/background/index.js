@@ -33,7 +33,7 @@ async function reportEvent(payload) {
     await fetch(`${API_BASE_URL}/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
     return { success: true };
   } catch (e) {
@@ -46,12 +46,12 @@ async function validateText(text) {
     const response = await fetch(`${API_BASE_URL}/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text }),
     });
     return await response.json();
   } catch (e) {
     console.error('[Jetstream] Validation failed:', e);
-    return { has_pii: false, has_secrets: false, detections: [], error: e.message };
+    return { has_pii: false, has_secrets: false, detections: [] };
   }
 }
 
@@ -60,34 +60,32 @@ async function extractText(fileData, filename, mimeType) {
     const response = await fetch(`${API_BASE_URL}/extract-text`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_data: fileData, filename, mime_type: mimeType })
+      body: JSON.stringify({ file_data: fileData, filename, mime_type: mimeType }),
     });
     return await response.json();
   } catch (e) {
     console.error('[Jetstream] Text extraction failed:', e);
-    return { text: '', success: false, error: e.message };
+    return { text: '', success: false };
   }
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'checkApproval') {
-    checkApproval(message.hash).then(approved => sendResponse({ approved }));
-    return true;
-  }
-  if (message.action === 'reportEvent') {
-    reportEvent(message.payload).then(sendResponse);
-    return true;
-  }
-  if (message.action === 'validateText') {
-    validateText(message.text).then(sendResponse);
-    return true;
-  }
-  if (message.action === 'extractText') {
-    extractText(message.file_data, message.filename, message.mime_type).then(sendResponse);
-    return true;
-  }
-  if (message.action === 'getStatus') {
-    sendResponse({ approvedCount: approvedHashes.size });
+  switch (message.action) {
+    case 'checkApproval':
+      checkApproval(message.hash).then(approved => sendResponse({ approved }));
+      return true;
+    case 'reportEvent':
+      reportEvent(message.payload).then(sendResponse);
+      return true;
+    case 'validateText':
+      validateText(message.text).then(sendResponse);
+      return true;
+    case 'extractText':
+      extractText(message.file_data, message.filename, message.mime_type).then(sendResponse);
+      return true;
+    case 'getStatus':
+      sendResponse({ approvedCount: approvedHashes.size });
+      break;
   }
 });
 

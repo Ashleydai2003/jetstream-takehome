@@ -5,12 +5,10 @@ A Chrome extension that prevents sensitive data from being sent to AI tools like
 ## Table of Contents
 
 - [Installation](#installation)
-  - [Backend Setup](#1-backend-setup)
-  - [Chrome Extension](#2-chrome-extension)
-  - [Admin Dashboard](#3-admin-dashboard)
+- [Architecture](#architecture)
 - [Detection Logic](#detection-logic)
-- [Guardrails AI Integration](#guardrails-ai-integration)
-- [Project Structure](#project-structure)
+- [Approval System](#approval-system)
+- [Data Privacy](#data-privacy)
 - [API Reference](#api-reference)
 
 ---
@@ -18,8 +16,6 @@ A Chrome extension that prevents sensitive data from being sent to AI tools like
 ## Installation
 
 ### 1. Backend Setup
-
-The backend is a Python FastAPI server that handles event logging, approval management, and PII validation via Guardrails AI.
 
 ```bash
 cd backend
@@ -31,70 +27,135 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure Guardrails AI
-# Get your token from https://hub.guardrailsai.com/keys
+# Configure Guardrails AI (get token from https://hub.guardrailsai.com/keys)
 guardrails configure --token YOUR_TOKEN_HERE
 
-# Install PII detection validators from Guardrails Hub
+# Install validators from Guardrails Hub
 guardrails hub install hub://guardrails/detect_pii
 guardrails hub install hub://guardrails/secrets_present
 
-# Download the spaCy language model (required for NER-based PII detection)
+# Download spaCy language model
 python -m spacy download en_core_web_lg
 
 # Start the server
 uvicorn main:app --reload --port 8000
 ```
 
-The backend will be running at `http://localhost:8000`. You can verify it's working by visiting `http://localhost:8000/api/health`.
-
 ### 2. Chrome Extension
 
-Load the extension in Chrome's developer mode:
-
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable **Developer mode** using the toggle in the top-right corner
-3. Click **Load unpacked**
-4. Select the `extension/` folder from this repository
-5. The extension icon should appear in your toolbar
-
-The extension automatically activates on:
-- `chatgpt.com`
-- `claude.ai`
+1. Open `chrome://extensions/`
+2. Enable **Developer mode**
+3. Click **Load unpacked** and select the `extension/` folder
 
 ### 3. Admin Dashboard
 
-The admin dashboard is a static HTML/JS application for reviewing and approving blocked events.
-
 ```bash
 cd admin-ui
-
-# Serve the dashboard locally
 python -m http.server 3000
 ```
 
-Open `http://localhost:3000` in your browser to view blocked events and approve requests.
+Open `http://localhost:3000` to review and approve blocked events.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              BROWSER                                         │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Chrome Extension                                 │ │
+│  │                                                                         │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐   │ │
+│  │  │  Content Script (MAIN world)                                     │   │ │
+│  │  │  • Overrides fetch() - intercepts ChatGPT requests               │   │ │
+│  │  │  • Overrides WebSocket.send() - intercepts Claude messages       │   │ │
+│  │  │  • Client-side SSN regex detection (instant blocking)            │   │ │
+│  │  │  • File upload interception and validation                       │   │ │
+│  │  │  • Shows block notification banner                               │   │ │
+│  │  └──────────────────────────┬──────────────────────────────────────┘   │ │
+│  │                             │ Custom Events                             │ │
+│  │  ┌──────────────────────────▼──────────────────────────────────────┐   │ │
+│  │  │  Bridge Script (ISOLATED world)                                  │   │ │
+│  │  │  • Relays messages between MAIN world and background             │   │ │
+│  │  │  • Required because MAIN world cannot access chrome.runtime      │   │ │
+│  │  └──────────────────────────┬──────────────────────────────────────┘   │ │
+│  │                             │ chrome.runtime.sendMessage               │ │
+│  │  ┌──────────────────────────▼──────────────────────────────────────┐   │ │
+│  │  │  Background Service Worker                                       │   │ │
+│  │  │  • Makes HTTP requests to backend (bypasses page CSP)            │   │ │
+│  │  │  • Caches approved hashes for quick lookups                      │   │ │
+│  │  └──────────────────────────┬──────────────────────────────────────┘   │ │
+│  └─────────────────────────────┼───────────────────────────────────────────┘ │
+└─────────────────────────────────┼───────────────────────────────────────────┘
+                                  │ HTTP (localhost:8000)
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FastAPI Backend                                      │
+│                                                                              │
+│  • /api/validate - Validates text using Guardrails AI                        │
+│  • /api/extract-text - Extracts text from PDFs for validation                │
+│  • /api/events - Stores blocked events with censored messages                │
+│  • /api/approvals - Stores approved content hashes (SHA-256)                 │
+│                                                                              │
+└─────────────────────────────────┬───────────────────────────────────────────┘
+                                  │ HTTP (localhost:8000)
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Admin Dashboard                                      │
+│                                                                              │
+│  • Lists all blocked events with metadata                                    │
+│  • Admin can approve events → hash added to approvals.json                   │
+│  • Future requests with same content hash are allowed through                │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Project Structure
+
+```
+jetstream-takehome/
+├── extension/                    # Chrome Extension (Manifest V3)
+│   ├── manifest.json
+│   └── src/
+│       ├── content/
+│       │   ├── index.js          # Main detection + blocking logic (MAIN world)
+│       │   └── bridge.js         # Message relay to background (ISOLATED world)
+│       ├── background/
+│       │   └── index.js          # API calls to backend (bypasses CSP)
+│       └── popup/
+│
+├── backend/                      # FastAPI Backend
+│   ├── main.py                   # API server + Guardrails AI integration
+│   ├── events.json               # Blocked events storage
+│   ├── approvals.json            # Approved content hashes
+│   └── requirements.txt
+│
+└── admin-ui/                     # Admin Dashboard
+    ├── index.html
+    ├── css/styles.css
+    └── js/
+        ├── api.js
+        └── main.js
+```
 
 ---
 
 ## Detection Logic
 
-The extension uses a **two-layer detection approach** for optimal performance and coverage:
-
 ### Layer 1: Client-Side (Instant)
 
-Before any request leaves the browser, the content script performs a fast regex check for Social Security Numbers:
+Fast regex check for SSNs before any request leaves the browser:
 
 ```
 Pattern: \b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b
 Matches: 123-45-6789, 123 45 6789, 123456789
 ```
 
-This provides zero-latency blocking for the most common sensitive data pattern.
-
 ### Layer 2: Server-Side (Comprehensive)
 
-The message is also sent to the backend's `/api/validate` endpoint, which uses Guardrails AI to detect a broader range of PII:
+Guardrails AI detects a broader range of PII via `/api/validate`:
 
 - Email addresses
 - Phone numbers
@@ -104,6 +165,15 @@ The message is also sent to the backend's `/api/validate` endpoint, which uses G
 - Driver's license numbers
 - API keys and secrets
 
+### File Validation
+
+Files are validated before upload:
+
+| File Type | Extraction |
+|-----------|------------|
+| .txt, .csv, .json, .md | Client-side (FileReader API) |
+| .pdf | Server-side (pdfplumber) |
+
 ### Blocking Behavior
 
 | Platform | SSN Detection | Other PII Detection |
@@ -111,81 +181,59 @@ The message is also sent to the backend's `/api/validate` endpoint, which uses G
 | ChatGPT (fetch) | Blocked before send | Blocked before send |
 | Claude (WebSocket) | Blocked before send | Detected after send* |
 
-*WebSocket.send() is synchronous, so we can only block SSNs instantly. Other PII is validated async and reported/notified, but the message may have already been sent.
-
-### Analytics Filtering
-
-The extension intelligently skips analytics and telemetry payloads (Segment, Sentry, etc.) by checking for telemetry-specific fields like `integrations`, `writeKey`, `anonymousId`, and `type: "track"`.
+*WebSocket.send() is synchronous, so only SSNs can be blocked instantly. Other PII is validated async and reported.
 
 ---
 
-## Guardrails AI Integration
+## Approval System
 
-We chose [Guardrails AI](https://www.guardrailsai.com/) for server-side PII detection because:
+### Storage Format
 
-1. **Prebuilt Validators**: The Hub provides battle-tested validators for common use cases
-2. **NER-Based Detection**: Uses spaCy's named entity recognition for accurate PII identification
-3. **Extensible**: Easy to add custom validators for domain-specific patterns
-4. **Auto-Remediation**: The `on_fail="fix"` mode automatically redacts detected PII
+Approvals are stored as SHA-256 content hashes in `approvals.json`:
 
-### Validators Used
-
-**DetectPII** (`hub://guardrails/detect_pii`)
-- Detects: EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, US_BANK_NUMBER, US_PASSPORT, US_DRIVER_LICENSE
-- Returns sanitized text with PII replaced by category tags (e.g., `<EMAIL_ADDRESS>`)
-
-**SecretsPresent** (`hub://guardrails/secrets_present`)
-- Detects: API keys, passwords, tokens, and other secrets
-- Uses pattern matching and entropy analysis
-
-### Usage in Code
-
-```python
-from guardrails import Guard
-from guardrails.hub import DetectPII, SecretsPresent
-
-pii_guard = Guard().use(DetectPII(pii_entities=PII_ENTITIES, on_fail="fix"))
-secrets_guard = Guard().use(SecretsPresent(on_fail="fix"))
-
-# Validate text
-result = pii_guard.validate(user_message)
-if any(s.validator_status == "fail" for s in result.validation_summaries):
-    # PII detected - extract categories from sanitized output
-    categories = extract_pii_categories(result.validated_output)
+```json
+["a1b2c3d4e5f6...64-char-hex-hash..."]
 ```
+
+### Hash Generation
+
+```javascript
+async function hash(text) {
+  const data = new TextEncoder().encode(text);
+  const buffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buffer), b => b.toString(16).padStart(2, '0')).join('');
+}
+```
+
+The hash is computed on the **original, uncensored message** so identical messages produce identical hashes.
+
+### Approval Flow
+
+1. Admin reviews blocked event in dashboard
+2. Clicks "Approve" → content hash added to `approvals.json`
+3. Extension checks approvals before blocking (cached + real-time)
+4. User retries same message → allowed through
 
 ---
 
-## Project Structure
+## Data Privacy
 
-```
-jetstream-takehome/
-├── extension/                    # Chrome Extension (Manifest V3)
-│   ├── manifest.json             # Extension configuration
-│   └── src/
-│       ├── content/
-│       │   ├── index.js          # Main detection + blocking logic (MAIN world)
-│       │   └── bridge.js         # Message relay to background (ISOLATED world)
-│       ├── background/
-│       │   └── index.js          # API calls to backend (bypasses CSP)
-│       └── popup/                # Extension popup UI
-│
-├── backend/                      # FastAPI Backend
-│   ├── main.py                   # API server + Guardrails AI integration
-│   ├── events.json               # Blocked events storage
-│   ├── approvals.json            # Approved content hashes
-│   └── requirements.txt          # Python dependencies
-│
-├── admin-ui/                     # Admin Dashboard
-│   ├── index.html                # Dashboard layout
-│   ├── css/styles.css            # Styling
-│   └── js/
-│       ├── api.js                # Backend API client
-│       └── main.js               # Dashboard logic
-│
-├── README.md                     # This file
-└── DESIGN.md                     # Architecture and design decisions
-```
+### What Gets Stored
+
+| Data | Stored? | Format |
+|------|---------|--------|
+| Original message | No | - |
+| Content hash | Yes | SHA-256 (irreversible) |
+| Censored message | Yes | SSNs masked, PII tagged |
+| Detection types | Yes | Category names only |
+| Metadata | Yes | URL, domain, timestamp |
+
+### Sanitization
+
+- **Client-side**: SSNs replaced with `***-**-****`
+- **Server-side**: Guardrails replaces PII with category tags (e.g., `<EMAIL_ADDRESS>`)
+
+The admin can make approval decisions without seeing actual sensitive values.
 
 ---
 
@@ -193,11 +241,12 @@ jetstream-takehome/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/validate` | Validate text for PII/secrets using Guardrails AI |
-| `GET` | `/api/events` | List blocked events (paginated, filterable by status) |
-| `GET` | `/api/events/:id` | Get single event details |
-| `POST` | `/api/events` | Log a new blocked event |
-| `PATCH` | `/api/events/:id` | Update event status (approve/reject) |
-| `GET` | `/api/approvals` | List all approved content hashes |
-| `GET` | `/api/approvals/check/:hash` | Check if a content hash is approved |
-| `GET` | `/api/health` | Health check endpoint |
+| `POST` | `/api/validate` | Validate text for PII/secrets |
+| `POST` | `/api/extract-text` | Extract text from PDF files |
+| `GET` | `/api/events` | List blocked events |
+| `GET` | `/api/events/:id` | Get single event |
+| `POST` | `/api/events` | Log a blocked event |
+| `PATCH` | `/api/events/:id` | Update event status |
+| `GET` | `/api/approvals` | List approved hashes |
+| `GET` | `/api/approvals/check/:hash` | Check if hash is approved |
+| `GET` | `/api/health` | Health check |

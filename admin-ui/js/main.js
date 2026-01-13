@@ -20,7 +20,7 @@ async function init() {
 async function loadEvents() {
   try {
     renderEvents(await api.getEvents());
-  } catch (error) {
+  } catch {
     eventsList.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ef4444;">Failed to load. Is backend running?</td></tr>`;
   }
 }
@@ -34,7 +34,7 @@ function escapeHtml(text) {
 
 function formatDate(dateStr) {
   const d = new Date(dateStr);
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function getTypeBadge(type) {
@@ -72,10 +72,8 @@ function renderEvents(events) {
 async function viewEvent(id) {
   try {
     const e = await api.getEvent(id);
-    const guardrails = e.guardrails_detections?.length 
-      ? e.guardrails_detections.join(', ') 
-      : 'None';
-    
+    const guardrails = e.guardrails_detections?.length ? e.guardrails_detections.join(', ') : 'None';
+
     modalBody.innerHTML = `
       <div class="detail-grid">
         <div class="detail-item">

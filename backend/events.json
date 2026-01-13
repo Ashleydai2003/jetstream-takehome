@@ -17,8 +17,7 @@
     ],
     "content_hash": "66441206ec9e9c39820b879a5baa544b402a1037dc63f99ee8cc71c76c358313",
     "message": "My phone number is 1231231234",
-    "status": "approved",
-    "created_at": "2026-01-12T18:22:15.149333",
-    "updated_at": "2026-01-12T18:22:23.220466"
+    "status": "pending",
+    "created_at": "2026-01-13T11:55:51.148582"
   }
 ]

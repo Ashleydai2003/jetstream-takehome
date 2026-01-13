@@ -126,13 +126,6 @@ body {
   font-size: 14px;
 }
 
-.events-table code {
-  background: #f3f4f6;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
 /* Status Badge */
 .status-badge {
   display: inline-block;
@@ -150,11 +143,6 @@ body {
 .status-badge.approved {
   background: #d1fae5;
   color: #065f46;
-}
-
-.status-badge.rejected {
-  background: #fee2e2;
-  color: #991b1b;
 }
 
 /* Type Badge */
@@ -204,15 +192,6 @@ body {
 
 .action-btn.approve:hover {
   background: #059669;
-}
-
-.action-btn.reject {
-  background: #ef4444;
-  color: white;
-}
-
-.action-btn.reject:hover {
-  background: #dc2626;
 }
 
 .action-btn.view {
@@ -311,15 +290,8 @@ body {
   grid-column: 1 / -1;
 }
 
-/* Detail Item */
 .detail-item {
   margin-bottom: 0;
-}
-
-.url-value {
-  word-break: break-all;
-  font-size: 13px;
-  color: #6b7280;
 }
 
 .detail-label {
@@ -335,10 +307,10 @@ body {
   color: #1f2937;
 }
 
-.detail-value code {
-  background: #f3f4f6;
-  padding: 2px 6px;
-  border-radius: 4px;
+.url-value {
+  word-break: break-all;
+  font-size: 13px;
+  color: #6b7280;
 }
 
 .message-box {
@@ -360,12 +332,12 @@ body {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .events-table {
-    font-size: 13px;
-  }
-
   .events-table th,
   .events-table td {
     padding: 8px 12px;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
   }
 }
