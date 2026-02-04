@@ -179,9 +179,9 @@ Files are validated before upload:
 | Platform | SSN Detection | Other PII Detection |
 |----------|--------------|---------------------|
 | ChatGPT (fetch) | Blocked before send | Blocked before send |
-| Claude (WebSocket) | Blocked before send | Detected after send* |
+| Claude (WebSocket) | Blocked before send | Blocked before send |
 
-*WebSocket.send() is synchronous, so only SSNs can be blocked instantly. Other PII is validated async and reported.
+All PII types are now blocked before send. The WebSocket interceptor validates messages asynchronously and only calls the original `send()` if validation passes. If validation fails or times out, the message is never sent.
 
 ---
 

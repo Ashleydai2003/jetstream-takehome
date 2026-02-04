@@ -19,5 +19,26 @@
     "message": "My phone number is 1231231234",
     "status": "pending",
     "created_at": "2026-01-13T11:55:51.148582"
+  },
+  {
+    "id": 2,
+    "url": "https://claude.ai/chat/4f77b60d-f7ac-4e20-a7bb-ad613453f1d8",
+    "domain": "claude.ai",
+    "content_type": "prompt",
+    "detection_type": "EMAIL_ADDRESS",
+    "summary": "Detected: EMAIL_ADDRESS",
+    "detections": [
+      {
+        "type": "EMAIL_ADDRESS",
+        "masked": "[REDACTED]"
+      }
+    ],
+    "guardrails_detections": [
+      "EMAIL_ADDRESS"
+    ],
+    "content_hash": "2deed4ff28b4c08b8a85d0e7b87bf262253ea571ca2da427a84459b4541d8498",
+    "message": "my email is hi@gmail.com",
+    "status": "pending",
+    "created_at": "2026-02-04T10:28:58.169871"
   }
 ]

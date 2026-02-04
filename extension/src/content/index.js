@@ -394,36 +394,99 @@
 
   function installWebSocketInterceptor() {
     WebSocket.prototype.send = function(data) {
+      // Skip analytics payloads - send immediately
       if (urlFilter.isAnalyticsPayload(data)) {
         return state.originalWSSend.apply(this, arguments);
       }
 
       const message = parser.extractUserMessage(data);
+
+      // If no message or too short, send immediately
       if (!message || message.length < 5) {
         return state.originalWSSend.apply(this, arguments);
       }
 
-      // Sync SSN check - can block immediately
+      // Sync SSN check - block immediately (don't send)
       if (utils.containsSSN(message)) {
         blocker.checkAndBlock(message);
         console.log('[Jetstream] WebSocket blocked (SSN)');
-        return;
+        return; // Block: never call originalWSSend
       }
 
-      // Async validation - can only warn after send
-      background.validate(message).then(async (validation) => {
-        if (validation.has_pii || validation.has_secrets) {
+      // Check if WebSocket is still open
+      if (this.readyState !== WebSocket.OPEN) {
+        return state.originalWSSend.apply(this, arguments);
+      }
+
+      // Store references for async validation
+      const ws = this;
+      const originalData = data;
+
+      // Validate BEFORE sending - don't call originalWSSend until validation passes
+      (async () => {
+        let timeoutId;
+
+        try {
+          // Set up timeout to avoid indefinite delays
+          const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+              reject(new Error('Validation timeout'));
+            }, CONFIG.BACKGROUND_TIMEOUT_MS);
+          });
+
+          // Fast path: check approvals first
           const hash = await utils.hash(message);
-          if (await background.isApproved(hash)) return;
+          if (await background.isApproved(hash)) {
+            clearTimeout(timeoutId);
+            // Approved - send it
+            if (ws.readyState === WebSocket.OPEN) {
+              state.originalWSSend.call(ws, originalData);
+            }
+            return;
+          }
 
-          const detections = validation.detections || ['PII'];
-          console.warn('[Jetstream] WebSocket sent PII (post-detection):', detections);
-          ui.showBlockNotification(detections);
-          background.reportEvent(message, detections, hash);
+          // Validate with backend (with timeout)
+          const validation = await Promise.race([
+            background.validate(message),
+            timeoutPromise
+          ]);
+
+          clearTimeout(timeoutId);
+
+          // Check if WebSocket is still open
+          if (ws.readyState !== WebSocket.OPEN) {
+            return;
+          }
+
+          if (validation.has_pii || validation.has_secrets) {
+            // BLOCK: Don't call originalWSSend - message never sent!
+            const detections = validation.detections || ['PII'];
+            console.log('[Jetstream] WebSocket blocked - detected:', detections);
+            ui.showBlockNotification(detections);
+            background.reportEvent(message, detections, hash);
+            return; // Message blocked - never sent
+          }
+
+          // ALLOW: Validation passed - send the message
+          if (ws.readyState === WebSocket.OPEN) {
+            state.originalWSSend.call(ws, originalData);
+          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error('[Jetstream] Validation error:', error);
+
+          // Fail closed for security: block on error/timeout
+          if (error.message === 'Validation timeout') {
+            ui.showBlockNotification(['Validation timeout - blocked for security']);
+          }
+          // Don't send on error - fail closed
+          return;
         }
-      });
+      })();
 
-      return state.originalWSSend.apply(this, arguments);
+      // Return early - don't send immediately
+      // The async function above will call originalWSSend only if validation passes
+      return;
     };
   }
 
